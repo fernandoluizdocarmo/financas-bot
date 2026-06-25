@@ -1,0 +1,20 @@
+{
+  "name": "financas-bot",
+  "version": "2.0.0",
+  "description": "Bot do Telegram para Minhas Finanças — com PIX, JSON persistence e keep-alive",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.1",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.66.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}

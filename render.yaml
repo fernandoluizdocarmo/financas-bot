@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: financas-bot
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node bot.js
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ADMIN_TELEGRAM_ID
+        sync: false
+      - key: APP_URL
+        value: https://app-financas-nine-pied.vercel.app/
+      - key: PIX_KEY
+        sync: false
+      - key: PIX_NAME
+        value: Minhas Financas
+      - key: PIX_CITY
+        value: Belo Horizonte
+      - key: PRICE
+        value: "5.00"
+      - key: SELF_URL
+        sync: false
+      - key: PORT
+        value: "3000"
+    healthCheckPath: /health

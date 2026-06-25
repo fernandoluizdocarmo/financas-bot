@@ -1,0 +1,21 @@
+# Dependências
+node_modules/
+
+# Banco de dados local
+*.db
+*.db-shm
+*.db-wal
+
+# Variáveis de ambiente (NUNCA commitar!)
+.env
+
+# Logs
+*.log
+logs/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+.vercel
+.env*
