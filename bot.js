@@ -98,7 +98,16 @@ const DB = {
     let expiresAt = null;
     
     if (plan.durationDays) {
-      const exp = new Date();
+      // Se já for assinante ativo, adiciona os dias à data de expiração existente
+      const existing = await this.getSubscriber(chatId);
+      let baseDate = new Date();
+      if (existing && existing.expires_at) {
+        const currentExp = new Date(existing.expires_at);
+        if (currentExp > baseDate) {
+          baseDate = currentExp;
+        }
+      }
+      const exp = new Date(baseDate);
       exp.setDate(exp.getDate() + plan.durationDays);
       expiresAt = exp.toISOString();
     }
@@ -464,8 +473,8 @@ bot.on('callback_query', async (query) => {
     }
 
     // ── Menu de Escolha de Planos ───────────────────────────────────────────
-    if (data === 'assinar') {
-      const isSub = await DB.isSubscriber(chatId);
+    if (data === 'assinar' || data === 'escolher_plano_renovar') {
+      const isSub = (data === 'assinar') ? await DB.isSubscriber(chatId) : false;
       if (isSub) {
         const sub = await DB.getSubscriber(chatId);
         const expText = sub.expires_at 
