@@ -24,6 +24,19 @@ const isVercel = process.env.VERCEL === '1';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
+// Configuração do botão do app
+const APP_BUTTON_TYPE = process.env.APP_BUTTON_TYPE || 'webapp'; // 'webapp', 'link' ou 'none'
+
+function getAppButton(text) {
+  if (APP_BUTTON_TYPE === 'none') {
+    return null;
+  }
+  if (APP_BUTTON_TYPE === 'link') {
+    return { text, url: APP_URL };
+  }
+  return { text, web_app: { url: APP_URL } };
+}
+
 // Configurações do PIX
 const PIX_KEY  = process.env.PIX_KEY;
 const PIX_NAME = (process.env.PIX_NAME || 'Minhas Financas').toUpperCase();
@@ -429,9 +442,9 @@ bot.on('callback_query', async (query) => {
         {
           parse_mode: 'Markdown',
           reply_markup: {
-            inline_keyboard: [
-              [{ text: '🚀 Abrir Minhas Finanças', web_app: { url: APP_URL } }],
-            ]
+            inline_keyboard: getAppButton('🚀 Abrir Minhas Finanças')
+              ? [[getAppButton('🚀 Abrir Minhas Finanças')]]
+              : []
           },
         }
       ).catch(() => {});
@@ -484,7 +497,8 @@ bot.on('callback_query', async (query) => {
           ? `Expira em: *${new Date(sub.expires_at).toLocaleDateString('pt-BR')}*`
           : 'Acesso vitalício permanente!';
 
-        const inline_keyboard = [[{ text: '📲 Abrir App', web_app: { url: APP_URL } }]];
+        const appBtn = getAppButton('📲 Abrir App');
+        const inline_keyboard = appBtn ? [[appBtn]] : [];
         if (sub.expires_at) {
           inline_keyboard.push([{ text: '🔄 Renovar / Estender Assinatura', callback_data: 'escolher_plano_renovar' }]);
         }
@@ -639,7 +653,11 @@ bot.on('callback_query', async (query) => {
           `✅ Acesso liberado!\n\nClique no botão abaixo para abrir o Minhas Finanças:`,
           {
             parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: '📲 Abrir Aplicativo', web_app: { url: APP_URL } }]] },
+            reply_markup: {
+              inline_keyboard: getAppButton('📲 Abrir Aplicativo')
+                ? [[getAppButton('📲 Abrir Aplicativo')]]
+                : []
+            },
           }
         );
       } else {
@@ -667,7 +685,8 @@ bot.on('callback_query', async (query) => {
           ? `Expira em: *${new Date(sub.expires_at).toLocaleDateString('pt-BR')}*`
           : 'Acesso vitalício permanente!';
 
-        const inline_keyboard = [[{ text: '📲 Abrir App', web_app: { url: APP_URL } }]];
+        const appBtn = getAppButton('📲 Abrir App');
+        const inline_keyboard = appBtn ? [[appBtn]] : [];
         if (sub.expires_at) {
           inline_keyboard.push([{ text: '🔄 Renovar / Estender Assinatura', callback_data: 'escolher_plano_renovar' }]);
         }
@@ -966,9 +985,9 @@ bot.onText(/\/liberar (\d+)/, async (msg, match) => {
     {
       parse_mode: 'Markdown',
       reply_markup: {
-        inline_keyboard: [
-          [{ text: '🚀 Abrir Minhas Finanças', web_app: { url: APP_URL } }],
-        ]
+        inline_keyboard: getAppButton('🚀 Abrir Minhas Finanças')
+          ? [[getAppButton('🚀 Abrir Minhas Finanças')]]
+          : []
       },
     }
   );
