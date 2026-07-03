@@ -48,11 +48,8 @@ module.exports = async (req, res) => {
       return new Date(s.subscribed_at) > oneDayAgo;
     }).length;
 
-    const hora  = new Date().getUTCHours();
-    const turno = hora < 15 ? '🌅 Manhã (6h)' : '🌆 Tarde (18h)';
-
     await bot.sendMessage(ADMIN_ID,
-      `📊 *Relatório de Assinaturas — ${turno} (${todayStr})*\n\n` +
+      `📊 *Relatório Diário de Assinaturas (${todayStr})*\n\n` +
       `👑 *Assinantes Ativos:* *${total}*\n` +
       `  • Mensal: *${planoStats['Mensal'] || 0}*\n` +
       `  • Anual: *${planoStats['Anual'] || 0}*\n` +
@@ -63,8 +60,8 @@ module.exports = async (req, res) => {
       { parse_mode: 'Markdown' }
     );
 
-    console.log(`[cron-report] Relatório enviado — ${turno} | Assinantes: ${total} | Pendentes: ${pending}`);
-    res.status(200).send(`Report sent. Subscribers: ${total}, Pending: ${pending}`);
+    console.log(`[cron-report] Relatório diário enviado | Assinantes: ${total} | Pendentes: ${pending}`);
+    res.status(200).send(`Daily report sent. Subscribers: ${total}, Pending: ${pending}`);
   } catch (err) {
     console.error(`[cron-report] Erro: ${err.message}`);
     res.status(500).send(`Error: ${err.message}`);

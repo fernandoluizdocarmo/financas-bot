@@ -68,7 +68,7 @@ const DB = {
       if (data.expires_at) {
         const expiry = new Date(data.expires_at);
         if (new Date() > expiry) {
-          await this.removeSubscriber(chatId);
+          // Apenas retorna false (acesso suspenso). Os dados serão mantidos por 30 dias.
           return false;
         }
       }
@@ -97,9 +97,10 @@ const DB = {
     const plan = PLANS[planKey] || PLANS.mensal;
     let expiresAt = null;
     
+    const existing = await this.getSubscriber(chatId);
+    
     if (plan.durationDays) {
       // Se já for assinante ativo, adiciona os dias à data de expiração existente
-      const existing = await this.getSubscriber(chatId);
       let baseDate = new Date();
       if (existing && existing.expires_at) {
         const currentExp = new Date(existing.expires_at);
@@ -117,7 +118,8 @@ const DB = {
       name: name || 'Usuário',
       username: username || '',
       plan: plan.name,
-      expires_at: expiresAt
+      expires_at: expiresAt,
+      subscribed_at: existing?.subscribed_at || new Date().toISOString()
     };
 
     const { error } = await supabase.from('bot_assinantes').upsert(payload);
@@ -240,9 +242,6 @@ function generatePixPayload(amount) {
   return body + crc16(body);
 }
 
-// Cache temporário dos códigos PIX por usuário (em memória)
-const pixCodeCache = new Map();
-
 // Cache temporário para controle de envio de comprovantes
 const receiptStateCache = new Map();
 
@@ -250,6 +249,9 @@ const receiptStateCache = new Map();
 async function sendPixPayment(chatId, planKey) {
   const plan = PLANS[planKey];
   const pixPayload = generatePixPayload(plan.price);
+
+  // Define que o usuário está no processo de envio de comprovante para este plano
+  receiptStateCache.set(chatId, planKey);
 
   if (!pixPayload) {
     return bot.sendMessage(chatId,
@@ -276,8 +278,6 @@ async function sendPixPayment(chatId, planKey) {
     color: { dark: '#1a1a2e', light: '#ffffff' },
   });
 
-  pixCodeCache.set(`${chatId}_${planKey}`, pixPayload);
-
   await bot.sendPhoto(chatId, qrBuffer, {
     caption:
       `💳 *Plano ${plan.name} Selecionado!*\n\n` +
@@ -287,7 +287,7 @@ async function sendPixPayment(chatId, planKey) {
       `💰 *Valor: R$ ${plan.price.toFixed(2).replace('.', ',')} / ${plan.label}*\n\n` +
       `📲 Escaneie o QR Code acima com o app do seu banco\n` +
       `ou clique em *Copiar código PIX* abaixo 👇\n\n` +
-      `_Após realizar o pagamento, toque em ✅ Já paguei_`,
+      `_Após realizar o pagamento, envie o comprovante (foto/arquivo) aqui ou toque em ✅ Já paguei_`,
     parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
@@ -334,15 +334,18 @@ function randomTipAndIndex(excludeIndex = null) {
 // ─────────────────────────────────────────
 function mainMenu(name) {
   return {
-    text: `👋 Olá, *${name}*! Bem-vindo ao *Minhas Finanças Bot*!\n\nEscolha uma opção:`,
+    text: `👑 *Minhas Finanças Premium Bot* 👑\n\n` +
+          `Olá, *${name}*! Seja muito bem-vindo(a) ao bot oficial do aplicativo *Minhas Finanças*.\n\n` +
+          `Aqui você pode gerenciar seu acesso ao app, receber dicas diárias exclusivas sobre finanças pessoais e investimentos, e falar com nosso suporte.\n\n` +
+          `👇 *Escolha uma opção para começar:*`,
     options: {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
           [{ text: '💳 Assinar / Escolher Plano',    callback_data: 'assinar'   }],
-          [{ text: '💡 Receber Dica de Finanças',   callback_data: 'dica'      }],
-          [{ text: '🔐 Verificar meu acesso',        callback_data: 'verificar' }],
           [{ text: '📲 Acessar o App',               callback_data: 'acessar_app' }],
+          [{ text: '🔐 Verificar meu acesso',        callback_data: 'verificar' }],
+          [{ text: '💡 Receber Dica de Finanças',   callback_data: 'dica'      }],
         ],
       },
     },
@@ -481,14 +484,20 @@ bot.on('callback_query', async (query) => {
           ? `Expira em: *${new Date(sub.expires_at).toLocaleDateString('pt-BR')}*`
           : 'Acesso vitalício permanente!';
 
+        const inline_keyboard = [[{ text: '📲 Abrir App', web_app: { url: APP_URL } }]];
+        if (sub.expires_at) {
+          inline_keyboard.push([{ text: '🔄 Renovar / Estender Assinatura', callback_data: 'escolher_plano_renovar' }]);
+        }
+        inline_keyboard.push([{ text: '⬅️ Voltar', callback_data: 'voltar' }]);
+
         await bot.sendMessage(chatId,
           `✅ Você *já tem acesso premium* ativo!\n\n` +
           `📦 Plano: *${sub.plan}*\n` +
           `⏳ ${expText}\n\n` +
-          `Acesse o app agora:`,
+          `Escolha uma opção:`,
           {
             parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: '📲 Abrir App', web_app: { url: APP_URL } }]] },
+            reply_markup: { inline_keyboard },
           }
         );
       } else {
@@ -530,7 +539,7 @@ bot.on('callback_query', async (query) => {
     if (data.startsWith('copiar_pix_')) {
       const planKey = data.split('_')[2];
       const plan = PLANS[planKey];
-      const code = pixCodeCache.get(`${chatId}_${planKey}`) || generatePixPayload(plan.price);
+      const code = generatePixPayload(plan.price);
       if (code) {
         await bot.sendMessage(chatId,
           `📋 *Código PIX Copia e Cola (${plan.name}):*\n\n\`${code}\`\n\n` +
@@ -658,14 +667,20 @@ bot.on('callback_query', async (query) => {
           ? `Expira em: *${new Date(sub.expires_at).toLocaleDateString('pt-BR')}*`
           : 'Acesso vitalício permanente!';
 
+        const inline_keyboard = [[{ text: '📲 Abrir App', web_app: { url: APP_URL } }]];
+        if (sub.expires_at) {
+          inline_keyboard.push([{ text: '🔄 Renovar / Estender Assinatura', callback_data: 'escolher_plano_renovar' }]);
+        }
+        inline_keyboard.push([{ text: '⬅️ Voltar', callback_data: 'voltar' }]);
+
         await bot.sendMessage(chatId,
           `✅ *Acesso Premium ativo!*\n\n` +
           `📦 Plano: *${sub.plan}*\n` +
           `⏳ ${expText}\n\n` +
-          `Clique abaixo para entrar no app:`,
+          `Escolha uma opção:`,
           {
             parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: '📲 Abrir App', web_app: { url: APP_URL } }]] },
+            reply_markup: { inline_keyboard },
           }
         );
       } else {
@@ -688,6 +703,104 @@ bot.on('callback_query', async (query) => {
     if (data === 'voltar') {
       const menu = mainMenu(query.from.first_name || 'usuário');
       await bot.sendMessage(chatId, menu.text, menu.options);
+    }
+
+    // ── Painel Admin callbacks ────────────────────────────────────────────────
+    if (data === 'admin_menu_assinantes') {
+      if (String(query.from.id) !== String(ADMIN_ID)) return;
+      const rows = await DB.allSubscribers();
+      if (!rows.length) {
+        await bot.sendMessage(chatId, '📋 Nenhum assinante ainda.', {
+          reply_markup: { inline_keyboard: [[{ text: '⬅️ Voltar ao Painel', callback_data: 'admin_voltar' }]] }
+        });
+      } else {
+        const list = rows.map(r => {
+          const exp = r.expires_at ? new Date(r.expires_at).toLocaleDateString('pt-BR') : 'Sem expiração';
+          return `• *${r.name}* (@${r.username || '—'}) — \`${r.chat_id}\`\n  Plano: *${r.plan}* | Expira: _${exp}_`;
+        }).join('\n\n');
+
+        await bot.sendMessage(chatId,
+          `📋 *Assinantes ativos (${rows.length}):*\n\n${list}`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '⬅️ Voltar ao Painel', callback_data: 'admin_voltar' }]] }
+          }
+        );
+      }
+      return bot.answerCallbackQuery(query.id).catch(() => {});
+    }
+
+    if (data === 'admin_menu_pendentes') {
+      if (String(query.from.id) !== String(ADMIN_ID)) return;
+      const rows = await DB.allPending();
+      if (!rows.length) {
+        await bot.sendMessage(chatId, '✅ Nenhum pagamento pendente.', {
+          reply_markup: { inline_keyboard: [[{ text: '⬅️ Voltar ao Painel', callback_data: 'admin_voltar' }]] }
+        });
+      } else {
+        const list = rows.map(r => {
+          const plan = PLANS[r.plan] || PLANS.mensal;
+          return `• *${r.name}* (@${r.username || '—'}) — \`${r.chat_id}\`\n  Plano solicitado: *${plan.name}* (R$ ${plan.price.toFixed(2).replace('.', ',')})\n  /liberar ${r.chat_id}  |  /rejeitar ${r.chat_id}`;
+        }).join('\n\n');
+
+        await bot.sendMessage(chatId,
+          `⏳ *Pagamentos pendentes (${rows.length}):*\n\n${list}`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '⬅️ Voltar ao Painel', callback_data: 'admin_voltar' }]] }
+          }
+        );
+      }
+      return bot.answerCallbackQuery(query.id).catch(() => {});
+    }
+
+    if (data === 'admin_menu_stats') {
+      if (String(query.from.id) !== String(ADMIN_ID)) return;
+      const subs = await DB.allSubscribers();
+      const pendings = await DB.allPending();
+      const total = subs.length;
+      const pending = pendings.length;
+
+      const planoStats = subs.reduce((acc, s) => {
+        acc[s.plan] = (acc[s.plan] || 0) + 1;
+        return acc;
+      }, {});
+
+      await bot.sendMessage(chatId,
+        `📊 *Estatísticas do Bot*\n\n` +
+        `👑 Assinantes ativos: *${total}*\n` +
+        `  • Mensal: *${planoStats['Mensal'] || 0}*\n` +
+        `  • Anual: *${planoStats['Anual'] || 0}*\n` +
+        `  • Vitalício: *${planoStats['Vitalício'] || 0}*\n\n` +
+        `⏳ Pagamentos pendentes: *${pending}*\n` +
+        `⚡ Uptime: *${formatUptime(process.uptime())}*\n` +
+        `💳 PIX configurado: *${PIX_KEY ? 'Sim ✅' : 'Não ❌'}*`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '⬅️ Voltar ao Painel', callback_data: 'admin_voltar' }]] }
+        }
+      );
+      return bot.answerCallbackQuery(query.id).catch(() => {});
+    }
+
+    if (data === 'admin_voltar') {
+      if (String(query.from.id) !== String(ADMIN_ID)) return;
+      await bot.sendMessage(chatId,
+        `🛠️ *Painel de Controle do Administrador*\n\n` +
+        `Selecione uma opção abaixo para gerenciar o bot:`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📋 Assinantes Ativos', callback_data: 'admin_menu_assinantes' }],
+              [{ text: '⏳ Pagamentos Pendentes', callback_data: 'admin_menu_pendentes' }],
+              [{ text: '📊 Estatísticas Gerais', callback_data: 'admin_menu_stats' }],
+              [{ text: '⬅️ Voltar ao Menu Principal', callback_data: 'voltar' }]
+            ]
+          }
+        }
+      );
+      return bot.answerCallbackQuery(query.id).catch(() => {});
     }
 
   } catch (err) {
@@ -799,6 +912,27 @@ bot.on('message', async (msg) => {
 // ─────────────────────────────────────────
 //  COMANDOS DO ADMIN
 // ─────────────────────────────────────────
+
+// /admin
+bot.onText(/\/admin/, async (msg) => {
+  if (String(msg.chat.id) !== String(ADMIN_ID)) return;
+
+  await bot.sendMessage(msg.chat.id,
+    `🛠️ *Painel de Controle do Administrador*\n\n` +
+    `Selecione uma opção abaixo para gerenciar o bot:`,
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📋 Assinantes Ativos', callback_data: 'admin_menu_assinantes' }],
+          [{ text: '⏳ Pagamentos Pendentes', callback_data: 'admin_menu_pendentes' }],
+          [{ text: '📊 Estatísticas Gerais', callback_data: 'admin_menu_stats' }],
+          [{ text: '⬅️ Voltar ao Menu Principal', callback_data: 'voltar' }]
+        ]
+      }
+    }
+  );
+});
 
 // /liberar <chatId>
 bot.onText(/\/liberar (\d+)/, async (msg, match) => {
@@ -994,6 +1128,131 @@ if (!isVercel) {
     rows.forEach(({ chat_id }) => {
       bot.sendMessage(chat_id, `🌅 *Dica do dia:*\n\n${tip}`, { parse_mode: 'Markdown' }).catch(() => {});
     });
+  }, { timezone: 'America/Sao_Paulo' });
+
+  // ─────────────────────────────────────────
+  //  LEMBRETES DE VENCIMENTO DE ASSINATURA — 9h (Brasília)
+  // ─────────────────────────────────────────
+  cron.schedule('0 9 * * *', async () => {
+    log(`📅 Verificando lembretes de vencimento de assinatura...`);
+    try {
+      const subs = await DB.allSubscribers();
+      const today = new Date();
+      const todayMidnight = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+      let sentCount = 0;
+
+      for (const sub of subs) {
+        if (!sub.expires_at) continue; // Pula vitalício ou permanente sem expiração
+
+        const expiry = new Date(sub.expires_at);
+        const expiryMidnight = new Date(Date.UTC(expiry.getUTCFullYear(), expiry.getUTCMonth(), expiry.getUTCDate()));
+
+        const diffTime = expiryMidnight - todayMidnight;
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        let msgText = '';
+        let sendMsg = false;
+
+        if (diffDays === 5) {
+          msgText = `⚠️ *Atenção! Sua assinatura está próxima de expirar!*\n\n` +
+                    `Olá, *${sub.name || 'Usuário'}*! Restam apenas *5 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                    `Renove agora mesmo para continuar controlando suas finanças sem nenhuma interrupção! 👇`;
+          sendMsg = true;
+        } else if (diffDays === 3) {
+          msgText = `⚠️ *Sua assinatura vence em 3 dias!*\n\n` +
+                    `Olá, *${sub.name || 'Usuário'}*! Restam apenas *3 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                    `Renove sua assinatura para não perder o acesso às estatísticas e relatórios! 👇`;
+          sendMsg = true;
+        } else if (diffDays === 0) {
+          msgText = `🚨 *Sua assinatura expira hoje!*\n\n` +
+                    `Olá, *${sub.name || 'Usuário'}*! Seu acesso Premium do *Minhas Finanças* expira hoje.\n\n` +
+                    `Evite o bloqueio do seu painel e continue sua jornada financeira clicando abaixo: 👇`;
+          sendMsg = true;
+        } else if (diffDays === -1) {
+          msgText = `❌ *Acesso Premium Expirado!*\n\n` +
+                    `Olá, *${sub.name || 'Usuário'}*! Sua assinatura do *Minhas Finanças* expirou ontem e seu acesso foi suspenso.\n\n` +
+                    `⚠️ *Importante:* Seus dados de cadastro serão preservados por *30 dias*. Se você renovar nesse período, recuperará o acesso normalmente. Após *30 dias*, seus dados serão excluídos definitivamente do sistema.\n\n` +
+                    `Renove agora mesmo para recuperar seu acesso instantaneamente: 👇`;
+          sendMsg = true;
+        }
+
+        if (sendMsg) {
+          try {
+            await bot.sendMessage(
+              sub.chat_id,
+              msgText,
+              {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '💳 Renovar Plano', callback_data: 'escolher_plano_renovar' }]
+                  ]
+                }
+              }
+            );
+            sentCount++;
+            log(`[cron-reminders] Lembrete (${diffDays} dias) enviado para ${sub.name} (${sub.chat_id})`);
+          } catch (msgErr) {
+            logErr(`[cron-reminders] Erro ao enviar para ${sub.chat_id}: ${msgErr.message}`);
+          }
+        }
+      }
+      log(`[cron-reminders] Lembretes processados. Total de mensagens enviadas: ${sentCount}`);
+    } catch (err) {
+      logErr(`[cron-reminders] Erro ao processar lembretes: ${err.message}`);
+    }
+  }, { timezone: 'America/Sao_Paulo' });
+
+  // ─────────────────────────────────────────
+  //  LIMPEZA AUTOMÁTICA DE DADOS (CLEANUP) — 3h (Brasília)
+  // ─────────────────────────────────────────
+  cron.schedule('0 3 * * *', async () => {
+    log(`📅 Executando limpeza automática de dados expirados há mais de 30 dias...`);
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoIso = thirtyDaysAgo.toISOString();
+
+      const subs = await DB.allSubscribers();
+      const expiredSubs = subs.filter(sub => sub.expires_at && sub.expires_at < thirtyDaysAgoIso);
+      let deletedCount = 0;
+
+      for (const sub of expiredSubs) {
+        try {
+          await bot.sendMessage(
+            sub.chat_id,
+            `⚠️ *Aviso de Exclusão de Dados*\n\n` +
+            `Olá, *${sub.name || 'Usuário'}*! Como sua assinatura do *Minhas Finanças Premium* expirou há mais de 30 dias e não foi identificada nenhuma renovação, seus dados de acesso foram completamente excluídos do nosso banco de dados. 🗑️\n\n` +
+            `Para voltar a utilizar o aplicativo e reativar suas dicas, faça uma nova assinatura a qualquer momento digitando /start.`
+          );
+        } catch (msgErr) {
+          logErr(`[cron-cleanup] Erro ao notificar usuário ${sub.chat_id}: ${msgErr.message}`);
+        }
+
+        try {
+          await DB.removeSubscriber(sub.chat_id);
+          deletedCount++;
+          log(`[cron-cleanup] Assinante ${sub.name} (${sub.chat_id}) removido definitivamente por expiração.`);
+        } catch (delError) {
+          logErr(`[cron-cleanup] Erro ao deletar ${sub.chat_id}: ${delError.message}`);
+        }
+      }
+
+      if (deletedCount > 0 && ADMIN_ID) {
+        try {
+          await bot.sendMessage(
+            ADMIN_ID,
+            `🗑️ *Limpeza Automática de Dados*\n\n` +
+            `Foram removidos definitivamente *${deletedCount}* assinante(s) que estavam expirados há mais de 30 dias.`
+          );
+        } catch (adminErr) {
+          logErr(`[cron-cleanup] Erro ao reportar para admin: ${adminErr.message}`);
+        }
+      }
+      log(`[cron-cleanup] Limpeza concluída. Removidos: ${deletedCount}`);
+    } catch (err) {
+      logErr(`[cron-cleanup] Erro ao executar limpeza automática: ${err.message}`);
+    }
   }, { timezone: 'America/Sao_Paulo' });
 }
 
