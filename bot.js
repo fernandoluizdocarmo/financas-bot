@@ -317,6 +317,24 @@ async function sendPixPayment(chatId, planKey) {
 // =============================================
 const bot = new TelegramBot(TOKEN, { polling: !isVercel });
 
+// Configura o menu button persistente padrão globalmente assim que o bot inicia
+(async function initGlobalMenu() {
+  if (isVercel) return; // Na Vercel, isso é feito pelo api/init-webhook.js
+  try {
+    if (APP_BUTTON_TYPE === 'none' || APP_BUTTON_TYPE === 'link') {
+      await bot.setChatMenuButton({ menu_button: { type: 'default' } });
+      console.log('✅ Botão de menu persistente global removido/restaurado para o padrão.');
+    } else {
+      await bot.setChatMenuButton({
+        menu_button: { type: 'web_app', text: 'Abrir App', web_app: { url: APP_URL } }
+      });
+      console.log('✅ Botão de menu persistente global configurado como WebApp.');
+    }
+  } catch (err) {
+    console.error(`❌ Erro ao configurar botão de menu global: ${err.message}`);
+  }
+})();
+
 // ─────────────────────────────────────────
 //  DICAS DE FINANÇAS
 // ─────────────────────────────────────────
