@@ -44,14 +44,53 @@ module.exports = async (req, res) => {
       const diffTime = expiryMidnight - todayMidnight;
       const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-      // Se faltar exatamente 5 dias
+      // Verifica dias restantes para vencimento
+      let msgText = '';
+      let sendMsg = false;
+
       if (diffDays === 5) {
+        msgText = `⚠️ *Atenção! Sua assinatura está próxima de expirar!*\n\n` +
+                  `Olá, *${sub.name || 'Usuário'}*! Restam apenas *5 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                  `Renove agora mesmo para continuar controlando suas finanças sem nenhuma interrupção! 👇`;
+        sendMsg = true;
+      } else if (diffDays === 4) {
+        msgText = `⚠️ *Atenção! Sua assinatura está próxima de expirar!*\n\n` +
+                  `Olá, *${sub.name || 'Usuário'}*! Restam apenas *4 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                  `Renove agora mesmo para continuar controlando suas finanças sem nenhuma interrupção! 👇`;
+        sendMsg = true;
+      } else if (diffDays === 3) {
+        msgText = `⚠️ *Sua assinatura vence em 3 dias!*\n\n` +
+                  `Olá, *${sub.name || 'Usuário'}*! Restam apenas *3 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                  `Renove sua assinatura para não perder o acesso às estatísticas e relatórios! 👇`;
+        sendMsg = true;
+      } else if (diffDays === 2) {
+        msgText = `⚠️ *Sua assinatura vence em 2 dias!*\n\n` +
+                  `Olá, *${sub.name || 'Usuário'}*! Restam apenas *2 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                  `Renove sua assinatura para não perder o acesso às estatísticas e relatórios! 👇`;
+        sendMsg = true;
+      } else if (diffDays === 1) {
+        msgText = `⚠️ *Sua assinatura vence amanhã!*\n\n` +
+                  `Olá, *${sub.name || 'Usuário'}*! Resta apenas *1 dia* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                  `Renove sua assinatura para não perder o acesso às estatísticas e relatórios! 👇`;
+        sendMsg = true;
+      } else if (diffDays === 0) {
+        msgText = `🚨 *Sua assinatura expira hoje!*\n\n` +
+                  `Olá, *${sub.name || 'Usuário'}*! Seu acesso Premium do *Minhas Finanças* expira hoje.\n\n` +
+                  `Evite o bloqueio do seu painel e continue sua jornada financeira clicando abaixo: 👇`;
+        sendMsg = true;
+      } else if (diffDays === -1) {
+        msgText = `❌ *Acesso Premium Expirado!*\n\n` +
+                  `Olá, *${sub.name || 'Usuário'}*! Sua assinatura do *Minhas Finanças* expirou ontem e seu acesso foi suspenso.\n\n` +
+                  `⚠️ *Importante:* Seus dados de cadastro serão preservados por *30 dias*. Se você renovar nesse período, recuperará o acesso normalmente. Após *30 dias*, seus dados serão excluídos definitivamente do sistema.\n\n` +
+                  `Renove agora mesmo para recuperar seu acesso instantaneamente: 👇`;
+        sendMsg = true;
+      }
+
+      if (sendMsg) {
         try {
           await bot.sendMessage(
             sub.chat_id,
-            `⚠️ *Atenção! Sua assinatura está próxima de expirar!*\n\n` +
-            `Olá, *${sub.name || 'Usuário'}*! Restam apenas *5 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
-            `Renove agora mesmo para continuar controlando suas finanças sem nenhuma interrupção! 👇`,
+            msgText,
             {
               parse_mode: 'Markdown',
               reply_markup: {
@@ -62,7 +101,7 @@ module.exports = async (req, res) => {
             }
           );
           sentCount++;
-          console.log(`[cron-reminders] Lembrete enviado para ${sub.name} (${sub.chat_id})`);
+          console.log(`[cron-reminders] Lembrete (${diffDays} dias) enviado para ${sub.name} (${sub.chat_id})`);
         } catch (msgErr) {
           console.error(`[cron-reminders] Erro ao enviar para ${sub.chat_id}: ${msgErr.message}`);
         }

@@ -1158,9 +1158,24 @@ if (!isVercel) {
                     `Olá, *${sub.name || 'Usuário'}*! Restam apenas *5 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
                     `Renove agora mesmo para continuar controlando suas finanças sem nenhuma interrupção! 👇`;
           sendMsg = true;
+        } else if (diffDays === 4) {
+          msgText = `⚠️ *Atenção! Sua assinatura está próxima de expirar!*\n\n` +
+                    `Olá, *${sub.name || 'Usuário'}*! Restam apenas *4 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                    `Renove agora mesmo para continuar controlando suas finanças sem nenhuma interrupção! 👇`;
+          sendMsg = true;
         } else if (diffDays === 3) {
           msgText = `⚠️ *Sua assinatura vence em 3 dias!*\n\n` +
                     `Olá, *${sub.name || 'Usuário'}*! Restam apenas *3 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                    `Renove sua assinatura para não perder o acesso às estatísticas e relatórios! 👇`;
+          sendMsg = true;
+        } else if (diffDays === 2) {
+          msgText = `⚠️ *Sua assinatura vence em 2 dias!*\n\n` +
+                    `Olá, *${sub.name || 'Usuário'}*! Restam apenas *2 dias* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
+                    `Renove sua assinatura para não perder o acesso às estatísticas e relatórios! 👇`;
+          sendMsg = true;
+        } else if (diffDays === 1) {
+          msgText = `⚠️ *Sua assinatura vence amanhã!*\n\n` +
+                    `Olá, *${sub.name || 'Usuário'}*! Resta apenas *1 dia* para o vencimento do seu plano Premium do *Minhas Finanças*.\n\n` +
                     `Renove sua assinatura para não perder o acesso às estatísticas e relatórios! 👇`;
           sendMsg = true;
         } else if (diffDays === 0) {
