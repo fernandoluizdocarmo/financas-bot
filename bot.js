@@ -442,6 +442,7 @@ bot.onText(/\/dica/, (msg) => {
     parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
+        ...(getAppButton('📲 Abrir Aplicativo') ? [[getAppButton('📲 Abrir Aplicativo')]] : []),
         [{ text: '🔄 Outra dica', callback_data: `dica_${index}` }],
         [{ text: '⬅️ Menu',       callback_data: 'voltar' }],
       ],
@@ -694,6 +695,7 @@ bot.on('callback_query', async (query) => {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
+            ...(getAppButton('📲 Abrir Aplicativo') ? [[getAppButton('📲 Abrir Aplicativo')]] : []),
             [{ text: '🔄 Outra dica', callback_data: `dica_${index}` }],
             [{ text: '⬅️ Menu',       callback_data: 'voltar' }],
           ],

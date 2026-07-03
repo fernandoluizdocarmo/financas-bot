@@ -38,9 +38,24 @@ module.exports = async (req, res) => {
 
     console.log(`[cron-tip] Enviando dica para ${rows.length} assinante(s)...`);
 
+    const APP_BUTTON_TYPE = process.env.APP_BUTTON_TYPE || 'webapp';
+    const APP_URL = process.env.APP_URL || 'https://app-financas-nine-pied.vercel.app/';
+
+    function getAppButton(text) {
+      if (APP_BUTTON_TYPE === 'none') return null;
+      if (APP_BUTTON_TYPE === 'link') return { text, url: APP_URL };
+      return { text, web_app: { url: APP_URL } };
+    }
+
+    const appBtn = getAppButton('🚀 Abrir Aplicativo');
+    const inline_keyboard = appBtn ? [[appBtn]] : [];
+
     await Promise.all(
       rows.map(({ chat_id }) =>
-        bot.sendMessage(chat_id, `🌅 *Dica do dia:*\n\n${tip}`, { parse_mode: 'Markdown' }).catch(() => {})
+        bot.sendMessage(chat_id, `🌅 *Dica do dia:*\n\n${tip}`, { 
+          parse_mode: 'Markdown',
+          reply_markup: inline_keyboard.length > 0 ? { inline_keyboard } : undefined
+        }).catch(() => {})
       )
     );
 
