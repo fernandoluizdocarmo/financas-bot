@@ -371,13 +371,51 @@ function mainMenu(name) {
 bot.onText(/\/start/, (msg) => {
   const { id: chatId, first_name } = msg.chat;
   log(`/start — ${first_name} (${chatId})`);
+
+  // Atualiza o botão de menu persistente (ao lado do campo de mensagem)
+  if (APP_BUTTON_TYPE === 'none' || APP_BUTTON_TYPE === 'link') {
+    bot.setChatMenuButton({
+      chat_id: chatId,
+      menu_button: { type: 'default' }
+    }).catch(() => {});
+  } else {
+    bot.setChatMenuButton({
+      chat_id: chatId,
+      menu_button: {
+        type: 'web_app',
+        text: 'Abrir App',
+        web_app: { url: APP_URL }
+      }
+    }).catch(() => {});
+  }
+
   const menu = mainMenu(first_name);
   bot.sendMessage(chatId, menu.text, menu.options).catch(logErr);
 });
 
 bot.onText(/\/menu/, (msg) => {
-  const menu = mainMenu(msg.chat.first_name || 'usuário');
-  bot.sendMessage(msg.chat.id, menu.text, menu.options).catch(logErr);
+  const chatId = msg.chat.id;
+  const firstName = msg.chat.first_name || 'usuário';
+
+  // Atualiza o botão de menu persistente
+  if (APP_BUTTON_TYPE === 'none' || APP_BUTTON_TYPE === 'link') {
+    bot.setChatMenuButton({
+      chat_id: chatId,
+      menu_button: { type: 'default' }
+    }).catch(() => {});
+  } else {
+    bot.setChatMenuButton({
+      chat_id: chatId,
+      menu_button: {
+        type: 'web_app',
+        text: 'Abrir App',
+        web_app: { url: APP_URL }
+      }
+    }).catch(() => {});
+  }
+
+  const menu = mainMenu(firstName);
+  bot.sendMessage(chatId, menu.text, menu.options).catch(logErr);
 });
 
 bot.onText(/\/dica/, (msg) => {
